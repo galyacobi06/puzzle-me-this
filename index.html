@@ -291,9 +291,9 @@ function measure(){
   Object.assign(M,{imgW:w,imgH:h,ox:(bw-w)/2,oy:(bh-h)/2,pw:w/P.cols,ph:h/P.rows});
   const body=Math.max(M.pw,M.ph);
   M.pad=Math.ceil(body*.32)+2;
-  M.ts=Math.min(2.6,(BIG?80:58)/body);
+  M.ts=Math.min(2.6,(BIG?76:54)/body);
   M.res=Math.min(3,DPR*Math.max(1,M.ts));
-  M.slot=(body+M.pad*.9)*M.ts;
+  M.gapW=M.pw*1.3*M.ts+8;
   M.trayH=tray.clientHeight;
 }
 function sizeCanvas(cv,x,y,w,h){cv.style.left=x+'px';cv.style.top=y+'px';cv.style.width=w+'px';cv.style.height=h+'px';cv.width=Math.round(w*DPR);cv.height=Math.round(h*DPR);const g=cv.getContext('2d');g.setTransform(DPR,0,0,DPR,0,0);return g}
@@ -333,17 +333,24 @@ function placeBoard(p){
 }
 const visibleTray=()=>P.trayOrder.map(i=>P.pieces[i]).filter(p=>!P.edgesOnly||p.edge);
 let gapAt=-1;
+// how far a piece's side tabs stick out (so tray pieces sit side by side, never overlapping)
+function sideTabs(p){
+  const L=p.c>0&&P.vE[p.c][p.r],R=p.c<P.cols-1&&P.vE[p.c+1][p.r];
+  return[L&&L.t===-1?.27*L.k*M.pw:0,R&&R.t===1?.27*R.k*M.pw:0];
+}
+let trayX=[];
 function layoutTray(){
-  const vis=new Set(visibleTray());let i=0;
-  const Wc=(M.pw+2*M.pad)*M.ts,Hc=(M.ph+2*M.pad)*M.ts,y=(M.trayH-Hc)/2;
+  const vis=new Set(visibleTray());let i=0,cx=12;trayX=[];
+  const Hc=(M.ph+2*M.pad)*M.ts,y=(M.trayH-Hc)/2,GAP=10;
   for(const id of P.trayOrder){const p=P.pieces[id];
     if(p.el.parentNode!==strip)strip.appendChild(p.el);
     if(!vis.has(p)){p.el.style.display='none';continue}
     p.el.style.display='';p.el.className='pc'+(lastTouched===p.id?' sel':'');
-    if(i===gapAt)i++;
-    setT(p,12+i*M.slot+(M.slot-Wc)/2,y,M.ts);i++;}
-  if(gapAt>=i)i=gapAt+1;
-  stripW=24+i*M.slot;strip.style.width=stripW+'px';setTrayOff(trayOff);
+    if(i===gapAt)cx+=M.gapW+GAP;
+    const[le,re]=sideTabs(p),w=(le+M.pw+re)*M.ts;
+    setT(p,cx-(M.pad-le)*M.ts,y,M.ts);trayX.push([cx,cx+w]);cx+=w+GAP;i++;}
+  if(gapAt>=i)cx+=M.gapW+GAP;
+  stripW=cx+12;strip.style.width=stripW+'px';setTrayOff(trayOff);
   trayMsg.style.display=(i&&!(gapAt>=0&&i===1))||gapAt>=0?'none':'flex';
   trayMsg.textContent=P.trayOrder.length?'All edge pieces are out. Tap the edge button to see the rest.':(P.placed<P.pieces.length?'All pieces are on the board':'');
   $('#prog').textContent=P.placed+'/'+P.pieces.length;
@@ -397,7 +404,7 @@ function hitBoard(cx,cy){
   return L.find(p=>hitPath(p,cx,cy))||null;
 }
 function hitTray(cx){
-  const vis=visibleTray(),r=tray.getBoundingClientRect(),i=Math.floor((cx-r.left+trayOff-12)/M.slot);
+  const vis=visibleTray(),r=tray.getBoundingClientRect(),sx=cx-r.left+trayOff,i=trayX.findIndex(([a,b])=>sx>=a-5&&sx<=b+5);
   return vis[i]||null;
 }
 function select(p){
@@ -458,7 +465,7 @@ function startDrag(p,x,y){
   void p.el.offsetWidth;p.el.classList.remove('noanim');for(const m of act.members)m.el.classList.remove('noanim');
   if(!fromTray){p.cv.style.transform='scale(1)';p.s=1}
 }
-function trayIndexAt(x){const tr=tray.getBoundingClientRect();return Math.max(0,Math.min(visibleTray().length,Math.floor((x-tr.left+trayOff-12)/M.slot)))}
+function trayIndexAt(x){const sx=x-tray.getBoundingClientRect().left+trayOff,i=trayX.findIndex(([a,b])=>sx<(a+b)/2);return i<0?trayX.length:i}
 function moveDrag(x,y){
   const group=act.members.length>1,overTray=!group&&y>tray.getBoundingClientRect().top+6;
   if(overTray){
@@ -503,7 +510,7 @@ function dropPiece(x,y,cancel){
   if(!group&&(cancel||y>tr.top+6)){
     const vis=visibleTray(),i=gapAt>=0?gapAt:trayIndexAt(x);gapAt=-1;
     if(i>=vis.length)P.trayOrder.push(p.id);else P.trayOrder.splice(P.trayOrder.indexOf(vis[i].id),0,p.id);
-    p.state='tray';p.grp=null;p.el.classList.add('noanim');layoutTray();void p.el.offsetWidth;p.el.classList.remove('noanim');return;
+    p.state='tray';p.grp=null;lastTouched=null;p.el.classList.add('noanim');layoutTray();void p.el.offsetWidth;p.el.classList.remove('noanim');return;
   }
   if(gapAt>=0){gapAt=-1;layoutTray()}
   const bx=p.x+M.pad-br.left-M.ox,by=p.y+M.pad-br.top-M.oy,tx=p.c*M.pw,ty=p.r*M.ph;
@@ -533,11 +540,11 @@ $('#bHint').onclick=()=>{
   let p=lastTouched!=null?P.pieces[lastTouched]:null;
   if(!p||p.state==='placed'){
     const vis=visibleTray();
-    p=vis[Math.min(vis.length-1,Math.max(0,Math.round(trayOff/M.slot)))]||P.pieces.filter(q=>q.state==='loose').sort((a,b)=>b.z-a.z)[0];
+    p=vis[Math.max(0,trayX.findIndex(([a,b])=>b>trayOff+20))]||P.pieces.filter(q=>q.state==='loose').sort((a,b)=>b.z-a.z)[0];
   }
   if(!p)return;
   if(p.state==='tray'){const i=visibleTray().indexOf(p);if(i<0){P.edgesOnly=false;$('#bEdge').classList.remove('on');layoutTray()}
-    const j=visibleTray().indexOf(p);setTrayOff(12+j*M.slot-tray.clientWidth/2+M.slot/2)}
+    const j=visibleTray().indexOf(p);if(trayX[j])setTrayOff((trayX[j][0]+trayX[j][1])/2-tray.clientWidth/2)}
   p.el.classList.add('hinted');
   const g=hintc.getContext('2d');g.setTransform(DPR,0,0,DPR,0,0);g.clearRect(0,0,hintc.width,hintc.height);
   const path=piecePath(p.r,p.c,-M.pad,-M.pad);
