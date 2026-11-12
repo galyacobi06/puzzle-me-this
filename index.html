@@ -110,6 +110,14 @@ html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:-appl
 #install{margin:14px 16px 0;background:#fff;border-radius:16px;padding:12px 14px;box-shadow:0 2px 8px rgba(0,0,0,.08);font-size:15px;color:#374151;line-height:1.4;display:flex;gap:10px;align-items:center}
 #install b{color:var(--ink)}
 #install button{margin-left:auto;border:0;background:none;color:#9ca3af;font-size:22px;padding:4px 6px;cursor:pointer}
+.pmacts{display:flex;justify-content:center;gap:26px;margin:18px 0 2px}
+.pmacts button{border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:6px;font:inherit;font-size:13px;font-weight:600;color:#4b5563;cursor:pointer;padding:0;min-width:56px}
+.pmacts .ci{width:54px;height:54px;border-radius:50%;background:#eaf8ee;display:grid;place-items:center;transition:transform .1s}
+.pmacts button:active .ci{transform:scale(.92)}
+.pmacts svg{width:24px;height:24px;fill:none;stroke:var(--green);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pmacts .del .ci{background:#fdecec}
+.pmacts .del svg{stroke:#ff3b30}
+.pmacts .del{color:#d92d20}
 #fx{position:fixed;inset:0;pointer-events:none;z-index:600}
 </style>
 </head>
@@ -166,8 +174,11 @@ html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:-appl
     <div class="prow"><span>Progress</span><span id="pmCount">0/0</span></div>
     <div class="bar"><i id="pmBar"></i></div>
     <button class="primary" id="pmGo">Continue</button>
-    <button class="link" id="pmSend" style="margin-top:6px">Send to someone</button>
-    <div class="row2"><button class="link" id="pmRestart">Restart</button><button class="link danger" id="pmDelete">Delete</button></div>
+    <div class="pmacts" id="pmActs">
+      <button id="pmSend"><span class="ci"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></span>Send</button>
+      <button id="pmRestart"><span class="ci"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></span>Restart</button>
+      <button id="pmDelete" class="del"><span class="ci"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></span>Delete</button>
+    </div>
     <button class="link" id="pmClose">My puzzles</button>
   </div>
 </div>
@@ -646,7 +657,7 @@ function puzzleMenu(r,welcome){
   $('#pmDelete').style.display=welcome?'none':'';
   $('#pmRestart').onclick=async()=>{close_('#pm');if(await ask('Current progress will be lost if you restart this puzzle.','Restart',true)){restartRec(r);openGame(r)}else renderLib()};
   $('#pmDelete').onclick=async()=>{close_('#pm');if(await ask('Delete this puzzle? This can’t be undone.','Delete',false)){DB.del(r.id);renderLib()}};
-  $('#pmSend').style.display=welcome?'none':'';
+  $('#pmActs').style.display=welcome?'none':'';
   $('#pmSend').onclick=()=>sendPuzzle(r);
   $('#pmClose').textContent=welcome?'My puzzles':'Cancel';
   $('#pmClose').onclick=()=>close_('#pm');
