@@ -820,20 +820,37 @@ const STARTER_N_PHONE=[16,16,25,25,36,36,49,49,64,64,81,81,100,100,121,121,144,1
 const STARTER_N_IPAD=[36,36,49,64,64,81,100,100,121,144,144,169,196,196,225,225,256,256];
 function loadUrl(u){return new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=u})}
 async function seedStarters(){
-  if(ls.get('pmt-seeded',''))return;
+  if(ls.get('pmt-seeded',''))return upgradeStarters();
   const base=Date.now();let missing=0;
   for(let i=0;i<STARTER_COUNT;i++){
     const id='starter-'+String(i+1).padStart(2,'0');
     if(mem.has(id))continue;
     try{
-      const im=await loadUrl('starter/'+String(i+1).padStart(2,'0')+'.jpg');
+      const im=await loadUrl('starter/'+String(i+1).padStart(2,'0')+'.jpg?v='+STARTER_VERSION);
       const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0);
       const r=makeRec(c,(BIG?STARTER_N_IPAD:STARTER_N_PHONE)[i],id);
-      r.created=r.updated=base-i;r.starter=true;DB.put(r);
+      r.created=r.updated=base-i;r.starter=true;r.hd=STARTER_VERSION;DB.put(r);
       if(current==='lib')renderLib();
     }catch(e){missing++}
   }
   if(!missing)ls.set('pmt-seeded','1');
+  upgradeStarters();
+}
+// replace low-resolution starter photos with sharper versions (keeps any progress: piece positions don't depend on resolution)
+const STARTER_HD=['02','04','06','08','09','16','17'],STARTER_VERSION='2';
+async function upgradeStarters(){
+  if(ls.get('pmt-starter-v','1')===STARTER_VERSION)return;
+  let failed=0;
+  for(const k of STARTER_HD){
+    const r=mem.get('starter-'+k);if(!r||r.hd===STARTER_VERSION)continue;
+    try{
+      const im=await loadUrl('starter/'+k+'.jpg?v='+STARTER_VERSION);
+      const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0);
+      const t=makeRec(c,r.n,'tmp-hd');DB.del('tmp-hd');
+      r.src=t.src;r.thumb=t.thumb;r.hd=STARTER_VERSION;imgCache.set(r.id,c);DB.put(r);
+    }catch(e){failed++}
+  }
+  if(!failed){ls.set('pmt-starter-v',STARTER_VERSION);if(current==='lib')renderLib()}
 }
 
 /* ---------- start up ---------- */
