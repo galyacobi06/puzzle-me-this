@@ -25,7 +25,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:-appl
 .hdr .side.r{justify-content:flex-end}
 .hdr .link{padding:10px 8px;margin:0}
 #lib{background:#f6f7f9}
-#grid{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px;align-content:start}
+#grid{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px;align-content:start;grid-auto-rows:max-content}
 .pz{position:relative;aspect-ratio:1;border-radius:18px;overflow:hidden;background:#e4e7ec;box-shadow:0 4px 12px rgba(0,0,0,.12);border:0;padding:0;cursor:pointer;font:inherit}
 .pz img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
 .pz .pct{position:absolute;top:10px;right:10px;background:#fff;color:#6b7280;font-weight:700;font-size:15px;border-radius:999px;padding:5px 11px}
@@ -611,11 +611,11 @@ function restartRec(r){
   const o=[...Array(r.total).keys()];for(let i=o.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[o[i],o[j]]=[o[j],o[i]]}
   r.trayOrder=o;r.placed=0;r.elapsed=0;r.done=false;r.updated=Date.now();DB.put(r);
 }
-function makeRec(cv,n){
+function makeRec(cv,n,id){
   const{cols,rows}=grid(n,cv.width/cv.height);
   const t=document.createElement('canvas');t.width=t.height=320;const m=Math.min(cv.width,cv.height);
   t.getContext('2d').drawImage(cv,(cv.width-m)/2,(cv.height-m)/2,m,m,0,0,320,320);
-  const r={v:1,id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),created:Date.now(),n,cols,rows,total:cols*rows,
+  const r={v:1,id:id||Date.now().toString(36)+Math.random().toString(36).slice(2,6),created:Date.now(),n,cols,rows,total:cols*rows,
     src:cv.toDataURL('image/jpeg',.9),thumb:t.toDataURL('image/jpeg',.8)};
   imgCache.set(r.id,cv);restartRec(r);return r;
 }
@@ -814,6 +814,28 @@ $('#shareFile').onchange=()=>{const f=$('#shareFile').files[0];$('#shareFile').v
 /* ---------- offline support ---------- */
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 
+/* ---------- starter puzzles (built in, added once on first launch) ---------- */
+const STARTER_COUNT=18;
+const STARTER_N_PHONE=[16,16,25,25,36,36,49,49,64,64,81,81,100,100,121,121,144,144];
+const STARTER_N_IPAD=[36,36,49,64,64,81,100,100,121,144,144,169,196,196,225,225,256,256];
+function loadUrl(u){return new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=u})}
+async function seedStarters(){
+  if(ls.get('pmt-seeded',''))return;
+  const base=Date.now();let missing=0;
+  for(let i=0;i<STARTER_COUNT;i++){
+    const id='starter-'+String(i+1).padStart(2,'0');
+    if(mem.has(id))continue;
+    try{
+      const im=await loadUrl('starter/'+String(i+1).padStart(2,'0')+'.jpg');
+      const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0);
+      const r=makeRec(c,(BIG?STARTER_N_IPAD:STARTER_N_PHONE)[i],id);
+      r.created=r.updated=base-i;r.starter=true;DB.put(r);
+      if(current==='lib')renderLib();
+    }catch(e){missing++}
+  }
+  if(!missing)ls.set('pmt-seeded','1');
+}
+
 /* ---------- start up ---------- */
 window.__pz={get P(){return P},get M(){return M}};
 (async()=>{
@@ -821,6 +843,7 @@ window.__pz={get P(){return P},get M(){return M}};
   await Promise.race([DB.open(),new Promise(r=>setTimeout(r,2000))]);
   for(const r of await DB.all())mem.set(r.id,r);
   show('lib');renderLib();
+  seedStarters();
   const last=mem.get(ls.get('pmt-last',''));
   if(last&&!last.done&&last.placed>0)puzzleMenu(last,true);
 })();
