@@ -341,15 +341,16 @@ function sideTabs(p){
 let trayX=[];
 function layoutTray(){
   const vis=new Set(visibleTray());let i=0,cx=12;trayX=[];
-  const Hc=(M.ph+2*M.pad)*M.ts,y=(M.trayH-Hc)/2,GAP=10;
+  const Hc=(M.ph+2*M.pad)*M.ts,y=(M.trayH-Hc)/2,GAP=4;
   for(const id of P.trayOrder){const p=P.pieces[id];
     if(p.el.parentNode!==strip)strip.appendChild(p.el);
     if(!vis.has(p)){p.el.style.display='none';continue}
     p.el.style.display='';p.el.className='pc'+(lastTouched===p.id?' sel':'');
-    if(i===gapAt)cx+=M.gapW+GAP;
-    const[le,re]=sideTabs(p),w=(le+M.pw+re)*M.ts;
-    setT(p,cx-(M.pad-le)*M.ts,y,M.ts);trayX.push([cx,cx+w]);cx+=w+GAP;i++;}
-  if(gapAt>=i)cx+=M.gapW+GAP;
+    // every piece gets the same slot (wide enough for tabs on both sides), body centred, so spacing is even
+    const S=M.pw*1.6*M.ts;
+    if(i===gapAt)cx+=S+GAP;
+    setT(p,cx+(S-M.pw*M.ts)/2-M.pad*M.ts,y,M.ts);trayX.push([cx,cx+S]);cx+=S+GAP;i++;}
+  if(gapAt>=i)cx+=M.pw*1.6*M.ts+GAP;
   stripW=cx+12;strip.style.width=stripW+'px';setTrayOff(trayOff);
   trayMsg.style.display=(i&&!(gapAt>=0&&i===1))||gapAt>=0?'none':'flex';
   trayMsg.textContent=P.trayOrder.length?'All edge pieces are out. Tap the edge button to see the rest.':(P.placed<P.pieces.length?'All pieces are on the board':'');
