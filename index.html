@@ -118,6 +118,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:-appl
 .pmacts .del .ci{background:#fdecec}
 .pmacts .del svg{stroke:#ff3b30}
 .pmacts .del{color:#d92d20}
+#cropWarn{display:none;align-items:center;gap:10px;background:#fff6e0;border:1px solid #f5d48a;color:#7a5200;border-radius:12px;padding:9px 12px;font-size:14px;line-height:1.35;margin-bottom:12px}
+#cropWarn.show{display:flex}
+#cropWarn .wi{flex:none;width:22px;height:22px;border-radius:50%;background:#f0a500;color:#fff;font-weight:800;display:grid;place-items:center;font-size:14px}
 #fx{position:fixed;inset:0;pointer-events:none;z-index:600}
 </style>
 </head>
@@ -132,6 +135,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:-appl
   <div class="hdr"><div class="side"><button class="link" id="cropCancel">Cancel</button></div><h1>Frame it</h1><div class="side r"></div></div>
   <div id="cropArea"><canvas id="cropCv"></canvas><div class="cropTip">Drag to move · pinch to zoom</div></div>
   <div class="cropCtl">
+    <div id="cropWarn"><span class="wi">!</span><span id="cropWarnTxt"></span></div>
     <div class="seg" id="shapes"><button data-s="square">Square</button><button data-s="portrait">Portrait</button><button data-s="landscape">Landscape</button></div>
     <p class="lbl">Pieces</p>
     <div id="chips"></div>
@@ -725,6 +729,16 @@ function drawCrop(){
   g.strokeStyle='rgba(255,255,255,.35)';g.lineWidth=1;g.beginPath();
   for(const k of[1,2]){g.moveTo(F.x+F.w*k/3,F.y);g.lineTo(F.x+F.w*k/3,F.y+F.h);g.moveTo(F.x,F.y+F.h*k/3);g.lineTo(F.x+F.w,F.y+F.h*k/3)}
   g.stroke();g.strokeStyle='#fff';g.lineWidth=2;g.strokeRect(F.x,F.y,F.w,F.h);
+  checkCropQuality();
+}
+// warn when the framed part of the photo has too few pixels to look sharp
+function checkCropQuality(){
+  const F=CROP.F,srcLong=Math.max(F.w,F.h)/CROP.s,minS=Math.max(F.w/CROP.img.width,F.h/CROP.img.height),zoomed=CROP.s>minS*1.08;
+  const bad=CROP.img!==SAMPLE&&srcLong<900;
+  $('#cropWarn').classList.toggle('show',bad);
+  if(bad)$('#cropWarnTxt').textContent=zoomed?'Zoomed in this far, the puzzle may look blurry. Try zooming out a little.'
+    :srcLong<500?'This photo is very small, so the puzzle will look blurry. A larger photo would look much better.'
+    :'This photo is a bit small, so the puzzle may look slightly blurry.';
 }
 const cps=new Map();let cpPrev=null;
 function gest(){const a=[...cps.values()],n=a.length;return{n,x:a.reduce((s,p)=>s+p.x,0)/n,y:a.reduce((s,p)=>s+p.y,0)/n,d:n>1?Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y):1}}
