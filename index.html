@@ -154,6 +154,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:-appl
     <h2>New puzzle</h2>
     <label class="bigopt"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="15" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 17l-5-5-9 8"/></svg></span><span>Choose a photo<small>From Photos, or take a new one</small></span><input type="file" accept="image/*" id="file"></label>
     <button class="bigopt" id="useSample"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 20l6-9 4 5 3-4 5 8z"/><circle cx="17" cy="6" r="2"/></svg></span><span>Use the sample picture<small>A quick puzzle to try</small></span></button>
+    <label class="bigopt"><span class="ic"><svg viewBox="0 0 24 24"><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"/><path d="M15 3h6v6M10 14L21 3"/></svg></span><span>Open a puzzle someone sent you<small>Pick the puzzle file from Files</small></span><input type="file" accept=".json,application/json" id="shareFile"></label>
     <button class="link" id="newCancel">Cancel</button>
   </div>
 </div>
@@ -165,6 +166,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:-appl
     <div class="prow"><span>Progress</span><span id="pmCount">0/0</span></div>
     <div class="bar"><i id="pmBar"></i></div>
     <button class="primary" id="pmGo">Continue</button>
+    <button class="link" id="pmSend" style="margin-top:6px">Send to someone</button>
     <div class="row2"><button class="link" id="pmRestart">Restart</button><button class="link danger" id="pmDelete">Delete</button></div>
     <button class="link" id="pmClose">My puzzles</button>
   </div>
@@ -644,11 +646,14 @@ function puzzleMenu(r,welcome){
   $('#pmDelete').style.display=welcome?'none':'';
   $('#pmRestart').onclick=async()=>{close_('#pm');if(await ask('Current progress will be lost if you restart this puzzle.','Restart',true)){restartRec(r);openGame(r)}else renderLib()};
   $('#pmDelete').onclick=async()=>{close_('#pm');if(await ask('Delete this puzzle? This can’t be undone.','Delete',false)){DB.del(r.id);renderLib()}};
+  $('#pmSend').style.display=welcome?'none':'';
+  $('#pmSend').onclick=()=>sendPuzzle(r);
   $('#pmClose').textContent=welcome?'My puzzles':'Cancel';
   $('#pmClose').onclick=()=>close_('#pm');
   open_('#pm');
 }
 function ask(msg,ok,keep){return new Promise(res=>{
+  const info=ok==='OK';$('#askOk').classList.toggle('danger',!info);$('#askNo').style.display=info?'none':'';
   $('#askMsg').textContent=msg;$('#askOk').textContent=ok;$('#askKeep').style.display=keep?'':'none';
   const done=v=>{close_('#ask');res(v)};
   $('#askOk').onclick=()=>done(true);$('#askKeep').onclick=()=>done(false);$('#askNo').onclick=()=>done(false);
@@ -743,22 +748,47 @@ let rt=null;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{i
 /* ---------- backup & restore ---------- */
 $('#bMore').onclick=()=>{const n=mem.size;$('#bkInfo').textContent=n?`${n} puzzle${n>1?'s':''} into one file`:'No puzzles yet';open_('#more')};
 $('#moreClose').onclick=()=>close_('#more');
+// hand a file to the iPhone share sheet (AirDrop, WhatsApp, Messages, Save to Files...)
+async function shareFile(file,title,text){
+  try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title,text});return true}}
+  catch(e){if(e&&e.name==='AbortError')return false}
+  const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=file.name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);return true;
+}
+const today=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
 $('#bBackup').onclick=async()=>{
   if(current==='game')saveNow();
   const list=[...mem.values()];if(!list.length)return;
-  const d=new Date(),name=`puzzles-backup-${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
-  const file=new File([JSON.stringify({app:'puzzle-me-this',v:1,puzzles:list})],name,{type:'application/json'});
-  try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'Puzzle backup'});close_('#more');return}}catch(e){if(e&&e.name==='AbortError')return}
-  const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=name;document.body.appendChild(a);a.click();
-  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);close_('#more');
+  const file=new File([JSON.stringify({app:'puzzle-me-this',v:1,type:'backup',puzzles:list})],`puzzles-backup-${today()}.json`,{type:'application/json'});
+  if(await shareFile(file,'Puzzle backup'))close_('#more');
 };
-$('#restoreFile').onchange=async()=>{
-  const f=$('#restoreFile').files[0];$('#restoreFile').value='';if(!f)return;close_('#more');
-  try{const data=JSON.parse(await f.text());const list=Array.isArray(data.puzzles)?data.puzzles:[];let n=0;
-    for(const r of list)if(r&&r.id&&r.src&&r.st&&r.cols&&r.rows){DB.put(r);n++}
-    renderLib();ask(n?`Restored ${n} puzzle${n>1?'s':''}.`:'No puzzles were found in that file.','OK',false);
-  }catch(e){ask('Sorry, that file couldn’t be read.','OK',false)}
-};
+// send one puzzle (the photo and piece count, as a fresh puzzle) to someone else
+async function sendPuzzle(r){
+  close_('#pm');
+  const p={v:1,id:r.id,n:r.n,cols:r.cols,rows:r.rows,total:r.total,src:r.src,thumb:r.thumb};
+  const file=new File([JSON.stringify({app:'puzzle-me-this',v:1,type:'shared',puzzles:[p]})],`puzzle-${r.total}-pieces-${today()}.json`,{type:'application/json'});
+  await shareFile(file,'A puzzle for you 🧩','A puzzle for you! Save this file, then in Puzzle Me This tap New puzzle → “Open a puzzle someone sent you”.');
+}
+// open a shared puzzle or a backup file
+async function importFile(f){
+  let data;try{data=JSON.parse(await f.text())}catch(e){return ask('Sorry, that file couldn’t be read.','OK',false)}
+  const list=data&&data.app==='puzzle-me-this'&&Array.isArray(data.puzzles)?data.puzzles:[];
+  let n=0,last=null;
+  for(const r of list){
+    if(!r||!r.src||!r.cols||!r.rows||!r.total)continue;
+    if(data.type==='shared'||!r.st){ // a fresh copy for this device
+      const c={v:1,id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),created:Date.now(),n:r.n,cols:r.cols,rows:r.rows,total:r.total,src:r.src,thumb:r.thumb||r.src};
+      restartRec(c);last=c;
+    }else{DB.put(r);last=r}
+    n++;
+  }
+  renderLib();
+  if(!n)return ask('No puzzles were found in that file.','OK',false);
+  if(data.type==='shared'&&n===1)return puzzleMenu(last,false);
+  ask(`Added ${n} puzzle${n>1?'s':''}.`,'OK',false);
+}
+$('#restoreFile').onchange=()=>{const f=$('#restoreFile').files[0];$('#restoreFile').value='';close_('#more');if(f)importFile(f)};
+$('#shareFile').onchange=()=>{const f=$('#shareFile').files[0];$('#shareFile').value='';close_('#newSheet');if(f)importFile(f)};
 
 /* ---------- install hint (iPhone/iPad, when opened in Safari) ---------- */
 (()=>{
