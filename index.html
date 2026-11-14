@@ -29,6 +29,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:-appl
 .pz{position:relative;aspect-ratio:1;border-radius:18px;overflow:hidden;background:#e4e7ec;box-shadow:0 4px 12px rgba(0,0,0,.12);border:0;padding:0;cursor:pointer;font:inherit}
 .pz img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
 .pz .pct{position:absolute;top:10px;right:10px;background:#fff;color:#6b7280;font-weight:700;font-size:15px;border-radius:999px;padding:5px 11px}
+.pz .lvl{position:absolute;top:10px;left:10px;color:#fff;font-weight:700;font-size:12px;border-radius:999px;padding:4px 9px;letter-spacing:.2px;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.lvl.l0{background:#34c759}.lvl.l1{background:#0a84ff}.lvl.l2{background:#ff9500}.lvl.l3{background:#ff3b30}
+.pmlvl{display:inline-block;color:#fff;font-weight:700;font-size:13px;border-radius:999px;padding:4px 11px;margin:-8px 0 14px}
 .pz .cnt{position:absolute;left:10px;bottom:10px;background:rgba(255,255,255,.92);color:#4b5563;font-weight:700;font-size:13px;border-radius:999px;padding:4px 9px}
 .pz .chk{position:absolute;right:10px;bottom:10px;width:36px;height:36px;border-radius:50%;background:var(--green);display:grid;place-items:center}
 .pz .chk svg{width:20px;height:20px;fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
@@ -100,7 +103,8 @@ html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:-appl
 .opt canvas,.opt .ph{width:100%;aspect-ratio:1;border-radius:12px;display:block;object-fit:cover}
 .opt .ph{display:grid;place-items:center;background:#e4e7ec;font-size:40px;color:var(--icon)}
 .opt input{position:absolute;inset:0;opacity:0;width:100%;height:100%}
-#chips{display:flex;flex-wrap:wrap;gap:8px}
+#chips,.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips .chip{padding:8px 12px;min-width:50px;font-size:15px}
 .chip{border:0;border-radius:999px;padding:10px 14px;font:inherit;font-weight:600;background:#f1f3f6;color:var(--ink);cursor:pointer;min-width:58px}
 .chip.sel{background:var(--green);color:#fff}
 .primary{margin-top:20px;width:100%;border:0;border-radius:999px;background:var(--green);color:#fff;font:inherit;font-size:20px;font-weight:700;padding:16px;cursor:pointer;box-shadow:0 6px 16px rgba(52,199,89,.35)}
@@ -174,9 +178,11 @@ html,body{margin:0;height:100%;overflow:hidden;background:#fff;font-family:-appl
 <div class="overlay" id="pm">
   <div class="card">
     <h2 id="pmTitle">Welcome back!</h2>
+    <div id="pmLvl" class="pmlvl"></div>
     <div class="pthumb"><img id="pmThumb" alt=""></div>
     <div class="prow"><span>Progress</span><span id="pmCount">0/0</span></div>
     <div class="bar"><i id="pmBar"></i></div>
+    <div id="pmPieces"><p class="lbl" style="text-align:left;margin:16px 4px 8px">Pieces</p><div id="pmChips" class="chips"></div></div>
     <button class="primary" id="pmGo">Continue</button>
     <div class="pmacts" id="pmActs">
       <button id="pmSend"><span class="ci"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></span>Send</button>
@@ -271,9 +277,9 @@ function paintSample(){
 const SAMPLE=paintSample();
 
 /* ---------- jigsaw geometry ---------- */
-const KNOB=[[.435,.02],[.435,.055],[.405,.085],[.345,.14],[.37,.245],[.50,.245],[.63,.245],[.655,.14],[.595,.085],[.565,.055],[.565,.02],[.60,0]];
 function makeEdges(cols,rows){
-  const e=()=>({t:Math.random()<.5?1:-1,j:(Math.random()-.5)*.08,k:.9+Math.random()*.2});
+  const J=()=>(Math.random()*2-1)*.04;
+  const e=()=>({t:Math.random()<.5?1:-1,a:J(),b:J(),c:J(),d:J(),f:J(),j:0,k:1});
   const hE=[],vE=[];
   for(let r=1;r<rows;r++){hE[r]=[];for(let c=0;c<cols;c++)hE[r][c]=e()}
   for(let c=1;c<cols;c++){vE[c]=[];for(let r=0;r<rows;r++)vE[c][r]=e()}
@@ -283,11 +289,9 @@ function edgePts(x0,y0,x1,y1,e){
   const dx=x1-x0,dy=y1-y0,L=Math.hypot(dx,dy),nx=dy/L,ny=-dx/L;
   const p=(u,v)=>[x0+u*dx+v*L*nx,y0+u*dy+v*L*ny];
   if(!e)return[p(0,0),p(1/3,0),p(2/3,0),p(1,0)];
-  const a=.5+(.40-.5)*e.k+e.j,b=.5+(.60-.5)*e.k+e.j;
-  const pts=[p(0,0),p(a/3,0),p(2*a/3,0),p(a,0)];
-  for(const[u,v]of KNOB)pts.push(p(.5+(u-.5)*e.k+e.j,v*e.k*e.t));
-  pts.push(p(b+(1-b)/3,0),p(b+2*(1-b)/3,0),p(1,0));
-  return pts;
+  // classic jigsaw edge: gently wavy sides, narrow neck and a round head, with small random variation
+  const T=.112,s=e.t,a=e.a??0,b=e.b??e.j*.5,c=e.c??0,d=e.d??(e.k-1)*.2,f=e.f??0,w=v=>v*s;
+  return[p(0,0),p(.2,w(a)),p(.5+b+d,w(-T+c)),p(.5-T+b,w(T+c)),p(.5-2*T+b-d,w(3*T+c)),p(.5+2*T+b-d,w(3*T+c)),p(.5+T+b,w(T+c)),p(.5+b+d,w(-T+c)),p(.8,w(f)),p(1,0)];
 }
 function piecePath(r,c,ox,oy){
   const{pw,ph}=M,x0=c*pw,y0=r*ph,x1=x0+pw,y1=y0+ph;
@@ -642,14 +646,39 @@ const CHECK='<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 function renderLib(){
   const g=$('#grid');g.innerHTML='';
   const nb=document.createElement('button');nb.className='pz new';nb.innerHTML='<b>+</b>New puzzle';nb.onclick=()=>open_('#newSheet');g.appendChild(nb);
-  const list=[...mem.values()].sort((a,b)=>b.updated-a.updated);
+  // unfinished first (in progress, then not started), completed last
+  const grp=r=>r.done?2:r.placed>0||(r.st&&r.st.some(x=>x[0]===1))?0:1;
+  const list=[...mem.values()].sort((a,b)=>grp(a)-grp(b)||(grp(a)===1?b.created-a.created:b.updated-a.updated));
   for(const r of list){
     const b=document.createElement('button');b.className='pz';
     const pct=Math.round(r.placed/r.total*100);
-    b.innerHTML=`<img src="${r.thumb}" alt="">`+(r.done?`<div class="chk">${CHECK}</div>`:(r.placed?`<div class="pct">${pct}%</div>`:''))+`<div class="cnt">🧩 ${r.total}</div>`;
+    const dl=diffOf(r);
+    b.innerHTML=`<img src="${r.thumb}" alt="">`+(dl?`<div class="lvl l${dl.i}">${dl.name}</div>`:'')+(r.done?`<div class="chk">${CHECK}</div>`:(r.placed?`<div class="pct">${pct}%</div>`:''))+`<div class="cnt">🧩 ${r.total}</div>`;
     b.onclick=()=>puzzleMenu(r,false);g.appendChild(b);
   }
+  measureDetail(list);
   if(!list.length){const e=document.createElement('div');e.className='empty';e.textContent='Tap “New puzzle” to turn one of your photos into a jigsaw.';g.appendChild(e)}
+}
+// how hard a puzzle is: more pieces = harder; plain pictures (big areas of sky, sea or sunset) = harder
+const LEVELS=['Easy','Medium','Hard','Expert'];
+function diffOf(r){
+  if(r.detail==null)return null;
+  const plain=Math.max(0,Math.min(1,(.085-r.detail)/.06)),eff=r.total*(.8+.8*plain);
+  const i=eff<40?0:eff<90?1:eff<170?2:3;return{i,name:LEVELS[i]};
+}
+let measuring=false;
+async function measureDetail(list){
+  if(measuring)return;const todo=list.filter(r=>r.detail==null&&r.thumb);if(!todo.length)return;measuring=true;
+  for(const r of todo){
+    try{
+      const im=await loadUrl(r.thumb),c=document.createElement('canvas');c.width=c.height=64;
+      const g=c.getContext('2d');g.drawImage(im,0,0,64,64);const d=g.getImageData(0,0,64,64).data,L=new Float32Array(4096);
+      for(let i=0;i<4096;i++)L[i]=.3*d[i*4]+.59*d[i*4+1]+.11*d[i*4+2];
+      let sum=0;for(let y=0;y<63;y++)for(let x=0;x<63;x++){const i=y*64+x;sum+=Math.abs(L[i+1]-L[i])+Math.abs(L[i+64]-L[i])}
+      r.detail=+(sum/(63*63*2*255)).toFixed(4);DB.put(r);
+    }catch(e){}
+  }
+  measuring=false;if(current==='lib')renderLib();
 }
 function puzzleMenu(r,welcome){
   $('#pmThumb').src=r.thumb;
@@ -663,6 +692,19 @@ function puzzleMenu(r,welcome){
   $('#pmDelete').onclick=async()=>{close_('#pm');if(await ask('Delete this puzzle? This can’t be undone.','Delete',false)){DB.del(r.id);renderLib()}};
   $('#pmActs').style.display=welcome?'none':'';
   $('#pmSend').onclick=()=>sendPuzzle(r);
+  const dl=diffOf(r);$('#pmLvl').style.display=dl?'':'none';if(dl){$('#pmLvl').textContent=dl.name;$('#pmLvl').className='pmlvl lvl l'+dl.i}
+  $('#pmPieces').style.display=welcome?'none':'';
+  const box=$('#pmChips');box.innerHTML='';
+  const opts=[...new Set([...COUNTS,r.n])].sort((a,b)=>a-b);
+  for(const n of opts){const c=document.createElement('button');c.className='chip'+(n===r.n?' sel':'');c.textContent=n;
+    c.onclick=async()=>{
+      if(n===r.n)return;
+      const busy=!r.done&&(r.placed>0||r.st.some(x=>x[0]===1));
+      if(busy){close_('#pm');const ok=await ask('Changing the number of pieces starts this puzzle again from the beginning.','Change',false);if(!ok)return puzzleMenu(r,false)}
+      let img;try{img=await getImg(r)}catch(e){return}
+      const g=grid(n,(img.naturalWidth||img.width)/(img.naturalHeight||img.height));
+      Object.assign(r,{n,cols:g.cols,rows:g.rows,total:g.cols*g.rows});restartRec(r);renderLib();puzzleMenu(r,false);
+    };box.appendChild(c)}
   $('#pmClose').textContent=welcome?'My puzzles':'Cancel';
   $('#pmClose').onclick=()=>close_('#pm');
   open_('#pm');
